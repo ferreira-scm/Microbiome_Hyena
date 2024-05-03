@@ -16,7 +16,7 @@ library(parallel)
 library(pheatmap)
 library(tidyr)
 library(dplyr)
-
+library(MultiAmplicon)
 
 ## re-run or use pre-computed results for different parts of the pipeline:
 ## Set to FALSE to use pre-computed and saved results, TRUE to redo analyses.
@@ -26,6 +26,7 @@ doMultiAmpSort <- FALSE
 doMultiAmpError <- FALSE ## c("errEst", "direct")
 doMultiAmpPipe <- FALSE
 doTax <- FALSE
+doDecontam <- FALSE
 
 ###################Full run Microbiome#######################
 ## Preparation of files. These are the same steps that are followed by
@@ -204,7 +205,7 @@ sampleIDs$ampMethod <- ifelse(grepl("P1", sampleIDs$sampleID),
 #Preparation of primer file ### Here stats the Multiamplicon pipeline from Emanuel
 
 #Primers used in the arrays, primer pairs in single processin are part of this
-ptable <- read.csv(file = "/SAN/Victors_playground/Metabarcoding/AA_Hyena/primer_list.csv",
+ptable <- read.csv(file = "Data/primer_list.csv",
                    sep=",", header=TRUE, stringsAsFactors=FALSE)
 primerF <- ptable[, "Seq_F"]
 primerR <- ptable[, "Seq_R"]
@@ -228,8 +229,6 @@ sumSample <- tibble(sampleIDs) %>%
 
 fewData <- subset(sumSample, fewReads)
 goodData <- subset(sumSample, !fewReads)
-
-#write.csv(sumSample, file="sequencingOutputBySample.csv")
 
 ##Multi amplicon pipeline
 if(doMultiAmpSort){
@@ -325,33 +324,12 @@ if(doMultiAmpPipe){
     MA.final <- readRDS(file="/SAN/Victors_playground/Metabarcoding/AA_Hyena/MA_piped.Rds")
 }
 
-## ## FIXME in package!
-## trackingF <- getPipelineSummaryX(MA.final) 
-## PipSum <- plotPipelineSummary(trackingF) + scale_y_log10()
-## ggsave("Figures/Pipeline_track.pdf", PipSum, height = 15, width = 15)
-
-if(doTax){
-    unlink("/SAN/Victors_playground/Metabarcoding/AA_Hyena/Hyena_in.fasta")
-    unlink("/SAN/Victors_playground/Metabarcoding/AA_Hyena/Hyena_out.blt")
-MA.A <- blastTaxAnnot(MA.final,
-                    db = "/SAN/db/blastdb/nt/nt",
-                    negative_gilist = "/SAN/db/blastdb/uncultured.gi",
-                    infasta = "/SAN/Victors_playground/Metabarcoding/AA_Hyena/Hyena_in.fasta",
-                    outblast = "/SAN/Victors_playground/Metabarcoding/AA_Hyena/Hyena_out.blt",
-                    taxonSQL = "/SAN/db/taxonomy/taxonomizr.sql", 
-                    num_threads = 64)
-
-### more sample data
-saveRDS(MA.A, file="/SAN/Victors_playground/Metabarcoding/AA_Hyena/MA_blast.Rds")
-} else {
-MA.A <- readRDS("/SAN/Victors_playground/Metabarcoding/AA_Hyena/MA_blast.Rds")
-    }
-
 
 #### alternative taxonomic annotation
 if(doTax){
+    
 # we first need to know the target of each amplicon
-primerL <- read.csv("/SAN/Susanas_den/gitProj/Eimeria_AmpSeq/data/primerInputUnique.csv")
+primerL <- read.csv("Data/primerInputUnique.csv")
 ptable$Primer_name <- paste(ptable$Name_F, ptable$Name_R, sep=".")
 primerL$Primer_name[6]<- "18S_0067a_deg_3Mod_53_F.NSR399_3Mod_53_R"
 primerL$Primer_name[120]<- "Bgf_132_F.Bgr_132_R"
@@ -465,6 +443,7 @@ sumTecRep <- function (PS, by.sample, fun=sum){
                  sample_data(sdatN))
     }
 }
+
 PM <- sumTecRep(PH, by.sample="Sample")
 PMS <- sumTecRep(PSS, by.sample="Sample")
 PMS.l <- list()
@@ -476,17 +455,12 @@ all(sample_names(PMS)==sample_names(PMS.l[[1]])) # another sanity check
 
 #### now the metadata (sampling data)
 ## Now adding the annotation realy
-## SDat <- read.csv("Data/Covariates_int_biomes.csv")
 
 SDat <- read.csv("Data/microbiome_tagged.csv")
 
 SDat$sample_ID.x[SDat$sample_ID.x=="C47"]  <- "C0047"
 SDat$sample_ID.x[SDat$sample_ID.x=="C52"]  <- "C0052"
 SDat$sample_ID.x[SDat$sample_ID.x=="C129"]  <- "C0129"
-
-SDat$CSocialRank <- rowMeans(SDat[, c("social_rank_hyena_ID",
-                                      "social_rank_genetic_mum")],
-                             na.rm=TRUE)
 
 newSdat <- merge(sample_data(PM), SDat, by.x=0,
                  by.y="sample_ID.x", all.x=TRUE)
@@ -507,11 +481,8 @@ grep("Negative", non.immuno, value=TRUE, invert=TRUE)
 library("decontam")
 all(sample_names(PMS)==rownames(PMS@sam_data)) # sanity check
 
-doDecontam <- FALSE
-
 if(doDecontam){
 PMS_neg <- subset_samples(PMS, grepl("Negative",rownames(PMS@otu_table)))
-
 PMS@sam_data$Control <- FALSE
 PMS@sam_data$Control[which(sample_names(PMS)%in%sample_names(PMS_neg))] <- TRUE
 
@@ -555,12 +526,6 @@ Keep <- rownames(contamdf.freq[contamdf.freq$contaminant==FALSE,])
 PMS <- prune_samples(sample_data(PMS)$Control == FALSE, PMS)
 PMS <- prune_taxa(Keep, PMS)
 
-saveRDS(PMS, "/SAN/Susanas_den/gitProj/AA_Hyenas_Pakt/tmp/PMS_decontan.rds")
-#saveRDS(PM, "/SAN/Susanas_den/gitProj/AA_Hyenas_Pakt/tmp/PM.rds")
-} else {
-PMS <- readRDS("tmp/PMS_decontan.rds")
-}
-
 ## adding metadata, removing contaminants and controls
 for (i in 1:length(PMS.l)) {
     try(PMS.l[[i]] <- prune_taxa(Keep, PMS.l[[i]]), silent=TRUE)
@@ -571,18 +536,23 @@ for (i in 1:length(PMS.l)) {
     try(PMS.l[[i]]@sam_data <- PMS@sam_data, silent=TRUE)
 }
 
+saveRDS(PMS, "tmp/PMS_decontan.rds")
+saveRDS(PMS.l, "tmp/PMS.l_decontan.rds")
+} else
+    PMS <- readRDS("tmp/PMS_decontan.rds")
+    PMS.l <- readRDS("tmp/PMS.l_decontan.rds")
 
-# abundance filtering at 0.005%
+## quality filtering
 fil <- function(ps){
     x = phyloseq::taxa_sums(ps)
     # abundance filtering at 0.005%
     keepTaxa = (x / sum(x) > 0.00005)
     summary(keepTaxa)
     ps = phyloseq::prune_taxa(keepTaxa, ps)
-# plus prevalnce filter at 1%
+    # plus prevalnce filter at 1%
     KeepTaxap <- microbiome::prevalence(ps)>0.01
     ps <- phyloseq::prune_taxa(KeepTaxap, ps)
-# subset samples based on total read count (100 reads)
+    # subset samples based on total read count (keep samples with more than 100 reads)
     ps <- phyloseq::prune_samples(sample_sums(ps)>100, ps)
     ps
     }
@@ -594,7 +564,7 @@ for (i in 1:length(PMS.l)) {
 }
 
 
-#### let's transform by amplicon
+#### let's normalise by amplicon
 TPMS.l <- list() # a list of normalised amplicons
 for (i in 1:length(fPMS.l)) {
     try(TPMS.l[[i]] <- transform_sample_counts(fPMS.l[[i]], function(x) x / sum(x)), silent=TRUE)
@@ -608,16 +578,15 @@ for (i in 2:length(TPMS.l)){
 
 TPMS
 
-
 # remove those ugly handlers
 tax_table(TPMS)[,colnames(tax_table(TPMS))] <- gsub(tax_table(TPMS)[, colnames(tax_table(TPMS))], pattern="[a-z]__", replacement="")
 
 ### let's clean up genus column in the tax table
 all(sample_names(TPMS)==sample_names(TPMS))
+
 tax <- as.data.frame(tax_table(TPMS))
 
 tax$Kingdom[is.na(tax$Kingdom)] <- "Unknown_domain"
-
 
 tax$Kingdom[!tax$Kingdom%in%c("Bacteria", "Archaea", "Unknown_domain")] <- "Eukarya"
 
@@ -626,26 +595,29 @@ tax[is.na(tax$Genus),]$Genus <- paste0("Unknown_genus_in_",tax[is.na(tax$Genus),
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Order)
 
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Class)
+
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Phylum)
+
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Kingdom)
 
 tax$Phylum[is.na(tax$Phylum)] <- "Unknown_phylum"
 
 tax$Class[is.na(tax$Class)] <- "Unknown_class"
 tax$Order[is.na(tax$Order)] <- "Unknown_order"
+
 tax[which(tax$Genus=="uncultured"),"Genus"] <- paste(tax[which(tax$Genus=="uncultured"),"Order"], tax[which(tax$Genus=="uncultured"),"Genus"], sep="_")
 
 unique(tax$Genus)
 
 TPMS@tax_table <-tax_table(as.matrix(tax))
 
-
 library(phyloseq)
-library(Hmisc)
+library(Hmisc, lib.loc="/usr/local/lib/R/site-library")
 library(Matrix)
 library(igraph)
 
 ### merge taxa based on correlations per genus
+###################################################
 genus <- get_taxa_unique(TPMS, "Genus")
 
 tax <- as.data.frame(tax_table(TPMS))
@@ -691,11 +663,13 @@ for (i in 1:length(genus)){
     }
 }
 
+TPMS <- prune_taxa(taxa_sums(TPMS)>0, TPMS)
 TPMS
 
 TPMS@tax_table[which(is.na(TPMS@tax_table[,6])),]
 
 which(is.na(TPMS@tax_table[,6]))
+
 ## some manual adjustments
 TPMS@tax_table[76,]
 TPMS@tax_table[76,6] <- "Unknown_genus_in_Eukarya"
@@ -706,13 +680,13 @@ TPMS@tax_table[171,]
 TPMS@tax_table[171,6] <- "Unknown_genus_in_Apicomplexa"
 TPMS@tax_table[171,5] <- "Unknown_family_in_Apicomplexa"
 
-TPMS@tax_table[724,]
-TPMS@tax_table[724,6] <- "Unknown_genus_in_Eukarya"
-TPMS@tax_table[724,5] <- "Unknown_family_in_Eukarya"
+TPMS@tax_table[727,]
+TPMS@tax_table[727,6] <- "Unknown_genus_in_Eukarya"
+TPMS@tax_table[727,5] <- "Unknown_family_in_Eukarya"
 
-TPMS@tax_table[972,]
-TPMS@tax_table[972,6] <- "Unknown_genus_in_Chlorophyceae"
-TPMS@tax_table[972,5] <- "Unknown_family_in_Chlorophyceae"
+TPMS@tax_table[973,]
+TPMS@tax_table[973,6] <- "Unknown_genus_in_Chlorophyceae"
+TPMS@tax_table[973,5] <- "Unknown_family_in_Chlorophyceae"
 
 
 which(is.na(TPMS@tax_table[,6]))
