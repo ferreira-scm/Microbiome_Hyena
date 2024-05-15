@@ -56,10 +56,11 @@ colnames(BF)
 submission <- data.frame(sample_name = fastqFiles,
                          organism = "metagenomic",
                          host = "Crocuta crocuta",
-                         collection_date = "01/01/2017",
+                         collection_date = "missing",
                          geo_loc_name = "Serengeti National Park (Tansania)",
-                         lat_lon = "-2.32; 34.83")
+                         lat_lon = "-2.32_34.83")
 
+colnames(sumbission) <- paste0("*", colnames(submission))
 
 write.table(submission,
             "Data/Metagenome.environmental.1.0.HYENA.tsv",
