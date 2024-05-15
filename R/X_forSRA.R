@@ -61,6 +61,6 @@ submission <- data.frame(sample_name = fastqFiles,
                          lat_lon = "-2.32; 34.83")
 
 
-write.csv(submission,
-          "Data/Metagenome.environmental.1.0.HYENA.tsv",
-          row.names=FALSE)
+write.table(submission,
+            "Data/Metagenome.environmental.1.0.HYENA.tsv",
+            row.names=FALSE)
