@@ -184,21 +184,14 @@ files <- PairedReadFileSet(filtFs, filtRs)
 ### SAMPLES
 sampleIDs <- read.csv("Data/Index_Pool_1.csv")
 sampleIDs <- merge(sampleIDs, read.csv("Data/Index_Pool_2.csv"), by="Sample", all=TRUE)
-
 sampleIDs <- pivot_longer(sampleIDs, cols=c(BeGenDiv_Pool_1, BeGenDiv_Pool_2)) 
-
 sampleIDs <- as.data.frame(sampleIDs)
-
 colnames(sampleIDs)[colnames(sampleIDs)%in%"value"] <- "sampleID"
-
 filter$sampleID <- gsub(".*?(P\\d)\\.(FLD\\d{4}).*",
                         "\\1_\\2", rownames(filter))
-
 filter$SnumIDs <- gsub("(S\\d{3,4})\\.(P\\d)\\.(FLD\\d{4}).*", "\\1_\\2_\\3",
                        rownames(filter))
-
 sampleIDs <- merge(sampleIDs, filter, by="sampleID", all=TRUE)
-
 sampleIDs$ampMethod <- ifelse(grepl("P1", sampleIDs$sampleID),
        "MultiAmp", ifelse(grepl("P2", sampleIDs$sampleID), "SingleAmp", NA))
 
