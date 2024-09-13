@@ -1,5 +1,4 @@
 ## Preprocessing script
-
 require(devtools)
 ## load the devel version
 devtools::load_all("/SAN/Susanas_den/MultiAmplicon/")
@@ -341,7 +340,7 @@ taxT1 <- list()
 seqs <- getSequencesFromTable(MA.final)
 seqs <- lapply(seqs, DNAStringSet)
     for (i in 1:48){
-        if (P.df$Gen[i]=="16S"){
+        if (P.df$Gen[i]
             try(taxT1[[i]] <- assignTaxonomy(seqs[[i]],
               "/SAN/Susanas_den/AmpMarkers/RESCRIPt/SSURef_NR99/Fastas/Slv138.dada2.fa",
                                          multithread=20,
