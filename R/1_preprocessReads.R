@@ -1,4 +1,8 @@
-## Preprocessing script
+############ Preprocessing script
+# in this script prepares the dat for microbiome analysis
+# it will not run since raw sequencing data is too heavy to be stores in the repo. 
+# data is available on SRA under BioProject PRJNA1134446 
+
 require(devtools)
 ## load the devel version
 devtools::load_all("/SAN/Susanas_den/MultiAmplicon/")
@@ -19,18 +23,20 @@ library(MultiAmplicon)
 
 ## re-run or use pre-computed results for different parts of the pipeline:
 ## Set to FALSE to use pre-computed and saved results, TRUE to redo analyses.
-doQualEval <- FALSE
-doFilter <- FALSE
-doMultiAmpSort <- FALSE
-doMultiAmpError <- FALSE ## c("errEst", "direct")
-doMultiAmpPipe <- FALSE
-doTax <- FALSE
-doDecontam <- FALSE
+doBioinf <- FALSE # the whole bioinformatics workflow, includes all steps below. Useful for running the script without the raw data.
+doQualEval <- FALSE # quality evaluation
+doFilter <- FALSE # read filtering based on quality evaluation
+doMultiAmpSort <- FALSE # sorting amplicons with MA package
+doMultiAmpError <- FALSE ## learning error rates with dada2
+doMultiAmpPipe <- FALSE ## main dada2 pipeline
+doTax <- FALSE # taxonomic annotation
+doDecontam <- FALSE # removal of contaminants with Decontam
 
+# if doBioinf is false it will jump to after the removal of contaminants and before quality filtering of ASVs (removing singletons).
+if(doBioinf){
 ###################Full run Microbiome#######################
 ## Preparation of files. These are the same steps that are followed by
 ## the DADA2 pipeline change according to where you downloaded
-
 path <- c(
     ## Hyena Pool 2 (Single amplicon run) 2nd Full sequencing Run (Good run)
     "2018_22_hyena", 
@@ -319,7 +325,6 @@ if(doMultiAmpPipe){
 
 #### alternative taxonomic annotation
 if(doTax){
-    
 # we first need to know the target of each amplicon
 primerL <- read.csv("Data/primerInputUnique.csv")
 ptable$Primer_name <- paste(ptable$Name_F, ptable$Name_R, sep=".")
@@ -340,7 +345,7 @@ taxT1 <- list()
 seqs <- getSequencesFromTable(MA.final)
 seqs <- lapply(seqs, DNAStringSet)
     for (i in 1:48){
-        if (P.df$Gen[i]
+        if (P.df$Gen[i]=="16S"){
             try(taxT1[[i]] <- assignTaxonomy(seqs[[i]],
               "/SAN/Susanas_den/AmpMarkers/RESCRIPt/SSURef_NR99/Fastas/Slv138.dada2.fa",
                                          multithread=20,
@@ -397,12 +402,13 @@ for (i in 1:length(PH.list)) {
 }
 all(sample_names(PH)==sample_names(PH.list[[1]])) # sanity check
 
-##  testing the oucome if only using singleAmpData
+##  testing the oucome if only using MultiAmpData
 PSS <- subset_samples(PH, ampMethod%in%"MultiAmp")
 PSS.l <- list()
 for (i in 1:length(PH.list)) {
     try(PSS.l[[i]] <- subset_samples(PH.list[[i]], ampMethod%in%"MultiAmp"))
 }
+
 ## This should acutally work with phyloseq's merge_samples function
 ## but doesn't as this messes up sample_data.
 ## CANDIDATE FOR INCLUSION IN PACKAGE...!
@@ -444,22 +450,20 @@ for (i in 1:length(PSS.l)) {
 }
 all(sample_names(PMS)==sample_names(PMS.l[[1]])) # another sanity check
 
-
 #### now the metadata (sampling data)
 ## Now adding the annotation realy
 
 SDat <- read.csv("Data/microbiome_tagged.csv")
-
 SDat$sample_ID.x[SDat$sample_ID.x=="C47"]  <- "C0047"
 SDat$sample_ID.x[SDat$sample_ID.x=="C52"]  <- "C0052"
 SDat$sample_ID.x[SDat$sample_ID.x=="C129"]  <- "C0129"
 
-newSdat <- merge(sample_data(PM), SDat, by.x=0,
+newSdat <- merge(sample_data(PMS), SDat, by.x=0,
                  by.y="sample_ID.x", all.x=TRUE)
 rownames(newSdat) <- newSdat$Row.names
 newSdat$Row.names <- NULL
 
-sample_data(PM) <- newSdat
+#sample_data(PM) <- newSdat
 sample_data(PMS) <- newSdat
 
 setdiff(SDat$sample_ID.x, sample_data(PM)$Sample)
@@ -467,17 +471,17 @@ setdiff(SDat$sample_ID.x, sample_data(PM)$Sample)
 
 non.immuno <- setdiff(sample_data(PM)$Sample, SDat$sample_ID.x)
 grep("Negative", non.immuno, value=TRUE, invert=TRUE)
-##   "B3456" "B6423" "X6674"
+## "B3456" "B6423" "X6674"
 
 ### Removing contaminants
 library("decontam")
 all(sample_names(PMS)==rownames(PMS@sam_data)) # sanity check
 
-if(doDecontam){
+if (doDecontam){
 PMS_neg <- subset_samples(PMS, grepl("Negative",rownames(PMS@otu_table)))
+
 PMS@sam_data$Control <- FALSE
 PMS@sam_data$Control[which(sample_names(PMS)%in%sample_names(PMS_neg))] <- TRUE
-
 for (i in 1:length(PSS.l)) {
     PMS.l[[i]]@sam_data$Control <- FALSE
 PMS.l[[i]]@sam_data$Control[which(sample_names(PMS.l[[i]])%in%sample_names(PMS_neg))] <- TRUE
@@ -490,6 +494,7 @@ rownames(PMS@sam_data)[PMS@sam_data$Control==TRUE]
 # assuming that negative controls have DNA concentration of 0
 PMS@sam_data$DNA_conc[PMS@sam_data$Control==TRUE] <- 0.0001
 
+## some manual adjustments
 # a few values have 2 measures. let'S just consider the first.
 PMS@sam_data$DNA_conc[179] <- 98.9
 PMS@sam_data$DNA_conc[196] <- 51
@@ -502,52 +507,44 @@ df <- as.data.frame(sample_data(PMS)) # Put sample_data into a ggplot-friendly d
 df$LibrarySize <- sample_sums(PMS)
 df <- df[order(df$LibrarySize),]
 df$Index <- seq(nrow(df))
+
 #ggplot(data=df, aes(x=Index, y=LibrarySize, color=Control)) + geom_point()
-
-
 contamdf.freq <- isContaminant(PMS, method="either", conc="DNA_conc", neg="Control", threshold=c(0.1,0.5), normalize=TRUE)
-
 table(contamdf.freq$contaminant)
 
 ### taxa to remove
 PMS@tax_table[rownames(contamdf.freq[contamdf.freq$contaminant==TRUE,]),5]
-
 ## let's remove them now and negative controls
-
 Keep <- rownames(contamdf.freq[contamdf.freq$contaminant==FALSE,])
 PMS <- prune_samples(sample_data(PMS)$Control == FALSE, PMS)
 PMS <- prune_taxa(Keep, PMS)
-
 ## adding metadata, removing contaminants and controls
 for (i in 1:length(PMS.l)) {
     try(PMS.l[[i]] <- prune_taxa(Keep, PMS.l[[i]]), silent=TRUE)
     try(PMS.l[[i]] <- prune_samples(sample_data(PMS.l[[i]])$Control == FALSE, PMS.l[[i]]), silent=TRUE)
 }
-
 for (i in 1:length(PMS.l)) {
     try(PMS.l[[i]]@sam_data <- PMS@sam_data, silent=TRUE)
 }
-
-saveRDS(PMS, "tmp/PMS_decontan.rds")
 saveRDS(PMS.l, "tmp/PMS.l_decontan.rds")
-} else
-    PMS <- readRDS("tmp/PMS_decontan.rds")
-    PMS.l <- readRDS("tmp/PMS.l_decontan.rds")
 
-## quality filtering
+}
+}
+
+PMS.l <- readRDS("tmp/PMS.l_decontan.rds")
+
+###############################################################################################
+## quality filtering of ASVs
 fil <- function(ps){
     x = phyloseq::taxa_sums(ps)
-    # abundance filtering at 0.005%
-    keepTaxa = (x / sum(x) > 0.00005)
-    summary(keepTaxa)
-    ps = phyloseq::prune_taxa(keepTaxa, ps)
-    # plus prevalnce filter at 1%
-    KeepTaxap <- microbiome::prevalence(ps)>0.01
+    # remove singletons (prevalnce filter at 0.5%)
+    KeepTaxap <- microbiome::prevalence(ps)>0.005
     ps <- phyloseq::prune_taxa(KeepTaxap, ps)
     # subset samples based on total read count (keep samples with more than 100 reads)
     ps <- phyloseq::prune_samples(sample_sums(ps)>100, ps)
     ps
-    }
+}
+
 
 ## filtering MA by amplicon
 fPMS.l <- list()
@@ -570,37 +567,24 @@ for (i in 2:length(TPMS.l)){
 
 TPMS
 
+
 # remove those ugly handlers
 tax_table(TPMS)[,colnames(tax_table(TPMS))] <- gsub(tax_table(TPMS)[, colnames(tax_table(TPMS))], pattern="[a-z]__", replacement="")
-
 ### let's clean up genus column in the tax table
 all(sample_names(TPMS)==sample_names(TPMS))
-
 tax <- as.data.frame(tax_table(TPMS))
-
 tax$Kingdom[is.na(tax$Kingdom)] <- "Unknown_domain"
-
 tax$Kingdom[!tax$Kingdom%in%c("Bacteria", "Archaea", "Unknown_domain")] <- "Eukarya"
-
 tax[is.na(tax$Genus),]$Genus <- paste0("Unknown_genus_in_",tax[is.na(tax$Genus),]$Family)
-
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Order)
-
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Class)
-
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Phylum)
-
 tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Kingdom)
-
 tax$Phylum[is.na(tax$Phylum)] <- "Unknown_phylum"
-
 tax$Class[is.na(tax$Class)] <- "Unknown_class"
 tax$Order[is.na(tax$Order)] <- "Unknown_order"
-
 tax[which(tax$Genus=="uncultured"),"Genus"] <- paste(tax[which(tax$Genus=="uncultured"),"Order"], tax[which(tax$Genus=="uncultured"),"Genus"], sep="_")
-
 unique(tax$Genus)
-
 TPMS@tax_table <-tax_table(as.matrix(tax))
 
 library(phyloseq)
@@ -608,12 +592,12 @@ library(Hmisc, lib.loc="/usr/local/lib/R/site-library")
 library(Matrix)
 library(igraph)
 
+
+############### this is the cASV approach##########
 ### merge taxa based on correlations per genus
 ###################################################
 genus <- get_taxa_unique(TPMS, "Genus")
-
 tax <- as.data.frame(tax_table(TPMS))
-
 summary(is.na(TPMS@tax_table[,6])) # sanity check that there's no NAs
 
 for (i in 1:length(genus)){
@@ -641,8 +625,9 @@ for (i in 1:length(genus)){
     net.grph=graph.adjacency(adjm,mode="undirected",weighted=TRUE,diag=FALSE)
 ### remove negative edges
     net=delete.edges(net.grph, which(E(net.grph)$weight<0)) # here's my condition.
-#plot(net,
-                                        #     vertex.label="")
+    #### remove comment to see all the networks plotted
+#plot(net, 
+#     vertex.label="")
     if(ncol(kaza)>100){
         oc <- cluster_fast_greedy(net)} else {
           oc <- cluster_optimal(net) # cluster
@@ -655,33 +640,26 @@ for (i in 1:length(genus)){
     }
 }
 
+
 TPMS <- prune_taxa(taxa_sums(TPMS)>0, TPMS)
 TPMS
 
 TPMS@tax_table[which(is.na(TPMS@tax_table[,6])),]
 
+# adjusting taxonomy
 which(is.na(TPMS@tax_table[,6]))
-
-## some manual adjustments
-TPMS@tax_table[76,]
-TPMS@tax_table[76,6] <- "Unknown_genus_in_Eukarya"
-TPMS@tax_table[76,5] <- "Unknown_family_in_Eukarya"
-TPMS@tax_table[76,2] <- "Unknown_phylum_in_Eukarya"
-
-TPMS@tax_table[171,]
-TPMS@tax_table[171,6] <- "Unknown_genus_in_Apicomplexa"
-TPMS@tax_table[171,5] <- "Unknown_family_in_Apicomplexa"
-
-TPMS@tax_table[727,]
-TPMS@tax_table[727,6] <- "Unknown_genus_in_Eukarya"
-TPMS@tax_table[727,5] <- "Unknown_family_in_Eukarya"
-
-TPMS@tax_table[973,]
-TPMS@tax_table[973,6] <- "Unknown_genus_in_Chlorophyceae"
-TPMS@tax_table[973,5] <- "Unknown_family_in_Chlorophyceae"
-
-
-which(is.na(TPMS@tax_table[,6]))
+tax <- as.data.frame(tax_table(TPMS))
+tax[is.na(tax$Genus),]$Genus <- paste0("Unknown_genus_in_",tax[is.na(tax$Genus),]$Family)
+tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Order)
+tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Class)
+tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Phylum)
+tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Genus<-paste0("Unknown_genus_in_",tax[which(tax$Genus=="Unknown_genus_in_NA"),]$Kingdom)
+tax$Phylum[is.na(tax$Phylum)] <- "Unknown_phylum"
+tax$Class[is.na(tax$Class)] <- "Unknown_class"
+tax$Order[is.na(tax$Order)] <- "Unknown_order"
+tax[which(tax$Genus=="uncultured"),"Genus"] <- paste(tax[which(tax$Genus=="uncultured"),"Order"], tax[which(tax$Genus=="uncultured"),"Genus"], sep="_")
+unique(tax$Genus)
+TPMS@tax_table <-tax_table(as.matrix(tax))
 
 # ok now I save and this is the table I will use.
 saveRDS(TPMS, "tmp/fPMS.rds")
