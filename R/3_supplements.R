@@ -1,10 +1,14 @@
-## here we are evaluating my quality filtering
+## in this screen we plot the reads we are removing in the quality filtering
+## before we were removing all reads with less than 0.005% of abundance and 1% prevalence
+## Most removed reads were actually singletons which also had very low abundance
+## We now changed the filtering to remove only singletons
 library(phyloseq)
+library(ggplot2)
+library(dplyr)
 
 PMS.l <- readRDS("tmp/PMS.l_decontan.rds")
 
-## this is our standard filtering
-## quality filtering
+## quality filtering 1% prevalence and 0.005% relative abundance plus samples with less than 100 reads
 fil <- function(ps){
     x = phyloseq::taxa_sums(ps)
     # abundance filtering at 0.005%
@@ -157,32 +161,16 @@ TsingPMS@tax_table <-tax_table(as.matrix(tax))
 ###################################### plotting composition
 ## small adjustment here
 
-Low.df <- data.frame(tax_table(TlowPMS))
-Low.df %>% count(Phylum) -> Low.df
+Sin.df <- data.frame(tax_table(TsingPMS))
+Sin.df %>% count(Phylum) -> Sin.df
 
-Low1 <- ggplot(Low.df, aes(x=Phylum, y=n, fill=Phylum))+
+Sin1 <- ggplot(Sin.df, aes(x=Phylum, y=n, fill=Phylum))+
     geom_col()+
     coord_polar()+
 #        scale_fill_manual(values=coul)+
     scale_y_log10("Number of cASVs per phylum")+
     theme_bw()+
     guides(fill="none")
+Sin1
 
-
-Low2.df <- data.frame(tax_table(Low))
-Low2.df %>% count(Phylum) -> Low2.df
-
-Low2 <- ggplot(Low2.df, aes(x=Phylum, y=n, fill=Phylum))+
-    geom_col()+
-    coord_polar()+
-#   scale_fill_manual(values=coul)+
-    scale_y_log10("Number of cASVs per phylum")+
-    theme_bw()+
-    guides(fill="none")
-
-
-library(cowplot)
-
-plot_grid(Low1, Sing1)
-
-plot_grid(Low1, Low2)
+ggplot2::ggsave(file="fig/FigureS2_compositionSing.pdf", Sin1, width = 180, height = 180, dpi = 300, units="mm")
