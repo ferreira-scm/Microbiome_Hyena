@@ -68,13 +68,15 @@ Fungi
 Eukarya@tax_table[which(is.na(Eukarya@tax_table[,2])),2] <- "Unknown_phylum_in_Eukarya"
 Eukarya@tax_table[which(Eukarya@tax_table[,2]=="Unknown_phylum"), 2] <- "Unknown_phylum_in_Eukarya"
 Bacteria@tax_table[which(Bacteria@tax_table[,2]=="Unknown_phylum"), 2] <- "Unknown_phylum_in_Bacteria"
+Eukarya.p <- tax_glom(Eukarya, "Phylum") # have to do this separate here otherwise the figure is too heavy
 
 # counting the number of ASVs per phylum within eukaryotes
 Euk.df <- data.frame(tax_table(Eukarya))
 Euk.df %>% dplyr::count(Phylum) -> Euk.df
 
-Eukarya.t <- microbiome::transform(Eukarya, "compositional")
+Eukarya.t <- microbiome::transform(Eukarya.p, "compositional")
 euk.df <- psmelt(Eukarya.t)
+
 # ordering the x axis for visualization purposes
 Euk.t2 <- tax_glom(Eukarya, taxrank="Phylum")
 di.m <- vegan::vegdist(Euk.t2@otu_table,
@@ -107,16 +109,22 @@ E1 <- ggplot(Euk.df, aes(x=Phylum, y=n, fill=Phylum))+
     theme_bw()+
     guides(fill="none")
 
+
 E <- ggplot(euk.df, aes(x=Sample2, y=Abundance, fill=Phylum))+
     geom_bar(stat="identity")+
     scale_fill_manual(values=coul)+
 #    scale_fill_viridis(discrete=T)+
     labs(x="Samples", y="Relative abundance")+
     theme_classic()+
-    guides(fill="none")
+    guides(fill="none")+
+        theme(
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
-Bac.t <- microbiome::transform(Bacteria, "compositional")
+Bac.p <- tax_glom(Bacteria, "Phylum") # have to do this separate here otherwise the figure is too heavy
+Bac.t <- microbiome::transform(Bac.p, "compositional")
 Bac.t2 <- tax_glom(Bacteria, taxrank="Phylum")
+
 Bac.df <- psmelt(Bac.t)
 di.m <- vegan::vegdist(Bac.t2@otu_table,
                        method="bray")
@@ -148,7 +156,10 @@ B <- ggplot(Bac.df, aes(x=Sample2, y=Abundance, fill=Phylum))+
     scale_fill_manual(values=bac.c)+
     labs(x="Samples", y="Relative abundance")+
     theme_classic()+
-    guides(fill="none")
+    guides(fill="none")+
+    theme(
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
 
 age.df <- PMS@sam_data %>%
@@ -164,34 +175,34 @@ PMS@sam_data$TimeP[age.df$age_sampling>age.df$min_age] <- 3
 PMS@sam_data$TimeP[age.df$age_sampling==age.df$max_age] <- 2
 
 repeatedS <- ggplot(data=sample_data(PMS),
-                    aes(x=age_sampling/365,
-                        y=reorder(hyena_ID, age_sampling),
+                    aes(y=age_sampling/365,
+                        x=reorder(hyena_ID, age_sampling),
                         group=hyena_ID,
                         fill=age_sampling_cat))+
-    geom_line(size=0.5,alpha=0.5)+
-    geom_point(colour="white",pch=21,size=3, alpha=0.7)+
-    geom_vline(xintercept=2, colour="firebrick", size=2, alpha=0.5)+
-    ylab("Hyena ID")+
-    xlab("Age at sampling (years)")+
-    scale_fill_manual(values=c("#a5c3ab", "#eac161"))+
-    scale_x_continuous(breaks=0:16)+
+    geom_point(aes(colour=age_sampling_cat), pch=16, size=2, alpha=0.8)+
+        geom_line(size=0.3,alpha=0.5)+
+    geom_hline(yintercept=2, colour="firebrick", size=1, alpha=0.5)+
+    xlab("Hyena ID")+
+    ylab("Age at sampling (years)")+
+    scale_color_manual(values=c("#a5c3ab", "#eac161"))+
+    scale_y_continuous(breaks=0:16)+
     theme_classic()+
     theme(legend.position="none",
           panel.grid.minor=element_blank(),
           panel.background=element_blank(),
           axis.line=element_line(colour="black"))+
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank())
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
 
-Fig1_1 <-  cowplot::plot_grid(E1, B1, ncol=2, labels="AUTO")
-Fig1_2 <-  cowplot::plot_grid(E, B, ncol=1, labels=c("C", "D"))
+Fig1_1 <-  cowplot::plot_grid(E1, B1, ncol=2, labels=c("B", "C"))
+Fig1_2 <-  cowplot::plot_grid(E, B, ncol=1, labels=c("D", "E"))
 
-Fig1 <- cowplot::plot_grid(repeatedS, Fig1_1,Fig1_2, ncol=1, rel_heights=c(1, 0.8, 0.8)) 
+Fig1 <- cowplot::plot_grid(repeatedS, Fig1_1,Fig1_2, ncol=1, rel_heights=c(0.8,1, 1))
 
 #Fig1
-ggplot2::ggsave(file="fig/Figure1.pdf", Fig1, width = 180, height = 250, dpi = 300, units="mm")
 
+ggplot2::ggsave(file="fig/Figure1.pdf", Fig1, width = 180, height = 280, dpi = 300, units="mm")
 
 #############################################################################
 ############# Modeling ß-diversity
@@ -203,6 +214,7 @@ ggplot2::ggsave(file="fig/Figure1.pdf", Fig1, width = 180, height = 250, dpi = 3
 ## c) Parasite component - all known eukaryotic parasites of hyenas
  do_Models <- FALSE # all models are saved, set TRUE to rerun all models. Warning: takes a few days
 if(do_Models){
+
     sample_data(PMS)$key <- paste(sample_data(PMS)$hyena_ID,
                               sample_data(PMS)$Sample, sep="_")
     key <- data.frame(ID=sample_data(PMS)$key)
@@ -479,11 +491,7 @@ metadt$season[metadt$Season>5&metadt$Season<11] <- "dry"
                 cores = 20, chains = 4,
                 inits=0)
     saveRDS(modelB, "tmp/modelB.rds")
-} else 
-    data.dyad <- readRDS("tmp/data.dyad.rds")
-
-
-
+    
 ######################### Now we model the data ####################
 ### modeling bacteria, fungi and parasites separately
 
@@ -520,7 +528,9 @@ modelB_B<-brm(Bacteria_B~ 1+ Fungi_B+Parasite_B+IgAP+ MucinP + Age+  Rank+ Gen_m
 
 saveRDS(modelB_B, "tmp/modelB_B.rds")
 
-modelB_B
+saveRDS(modelB, "tmp/modelB.rds")
+} else 
+    data.dyad <- readRDS("tmp/data.dyad.rds")
 
 
 ########################################################################
@@ -757,34 +767,6 @@ modelB_P <- readRDS("tmp/modelB_P.rds")
 modelB_B <- readRDS("tmp/modelB_B.rds")
 modelB_F <- readRDS("tmp/modelB_F.rds")
 
-bayes_R2(modelB_FPB)
-
-bayes_R2(modelB_B)
-
-bayes_R2(modelB_P)
-
-bayes_R2(model_Juv)
-
-pp_check(model_Juv)
-
-pp_check(modelB_FPB, resp="ParasiteB")
-
-pp_check(modelB_F)
-
-conditional_effects(modelB_FPB, "Age", resp="ParasiteB")
-conditional_effects(modelB_FPB, "Age", resp="FungiB")
-conditional_effects(modelB_F, "Age")
-
-
-modelB_P
-
-library("interactions")
-
-sim_slopes(modelB_P, pred=IgAP, modx=Age, jnplot=TRUE)
-
-interact_plot(modelB_P, pred=IgAP, modx=Age, interval=TRUE, plot.points=TRUE)
-
-
 
 ## summaries of overall models (3 different metrics of beta diversity)
 print(summary(modelB), digits=3)
@@ -807,11 +789,123 @@ print(summary(modelB_P), digits=3)
 
 print(summary(modelB_B), digits=3)
 
-print(summary(modelA_FPB), digits=3) # same as individual models but with autcorr between dependent variables
+print(summary(modelB_F), digits=3)
 
-################################visualising the models######################################################
-############################# plotting
-### making dataframe for Bray_Curtis first
+print(summary(modelB), digits=3)
+
+#bayes_R2(modelB_FPB)
+
+bayes_R2(modelB_B)
+
+bayes_R2(modelB_P)
+
+bayes_R2(modelB_F)
+
+bayes_R2(model_Juv)
+
+bayes_R2(modelB)
+
+library(ggmcmc)
+library(ggridges)
+
+### saving juvenile results for all models
+para <- summary(model_Juv)$fixed
+res.df <- data.frame(Effect=rownames(para),
+           Estimate=para$Estimate,
+           lCI=para$'l-95% CI',
+           uCI=para$'u-95% CI')
+
+res.df$Domain <- "Overall"
+res.df <- res.df[!res.df$Effect=="Intercept",] # removing intercepts
+
+res2 <- summary(model_JuvP)$fixed
+res2$Domain <- "Parasite"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
+
+res2 <- summary(model_JuvF)$fixed
+res2$Domain <- "Fungi"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
+
+res2 <- summary(model_JuvB)$fixed
+res2$Domain <- "Bacteria"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
+
+write.csv(res.df, "tmp/summary_BRMSmodelsJUVENILES.csv")
+
+### saving overall results for all ß-diversity metrics
+para <- summary(modelA)$fixed
+res.df <- data.frame(Effect=rownames(para),
+           Estimate=para$Estimate,
+           lCI=para$'l-95% CI',
+           uCI=para$'u-95% CI')
+
+res.df$Domain <- "Aitchison"
+res.df <- res.df[!res.df$Effect=="Intercept",] # removing intercepts
+
+res2 <- summary(modelB)$fixed
+res2$Domain <- "Bray"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
+
+res2 <- summary(modelJ)$fixed
+res2$Domain <- "Jaccard"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
+
+res.df
+
+write.csv(res.df, "tmp/summary_BRMSmodelsOVERALL.csv")
+
+############################# plot Figure 2
+#the effects of all variables on the overall microbiome
+modelB_transformed <- ggs(modelB)
+
+cat <- filter(modelB_transformed, Parameter %in% c("b_IgAP", "b_MucinP", "b_Age", "b_Rank", "b_Gen_mum1", "b_Temporal", "b_Clan1", "b_Season1", "b_IgAP:Age", "b_MucinP:Age"))
+# let's not forget to subset here
+cat2 <- cat[cat$Iteration>1000,]
+
+cat2$Parameter <- droplevels(cat2$Parameter)
+
+unique(cat2$Parameter)
+
+cat2$Parameter <-factor(cat2$Parameter, levels=c("b_Rank", "b_Season1","b_Temporal", "b_Clan1", "b_Gen_mum1", "b_IgAP:Age", "b_MucinP:Age", "b_IgAP", "b_MucinP", "b_Age"))
+
+colours <- c("#7d1a2a", "#74b2b4", "#bf7e7e", "#bd5569", "#60776a", "#e5cbd9", "#c1d2a2", "#b1658d", "#8e9f6f", "#d8b255") 
+
+Fig2 <- ggplot(cat2, aes(x = value, y=Parameter, fill=Parameter))+
+    geom_density_ridges(rel_min_height = 0.005, scale=5, alpha=0.8)+
+    #    facet_wrap(~Parameter)+
+    geom_vline(xintercept = 0, col  = "black", size = 1, linetype="dashed")+
+    geom_boxplot(outlier.shape = NA, width=0.2)+
+ #   scale_fill_manual(values=c("#fc9c24", "#fce69e", "#24acb4", "#b4ccbc"))+
+    scale_fill_manual(values=colours)+
+    xlab("Posterior probability distribution")+
+    ylab("")+
+    theme_classic()+
+    theme(legend.position="none")
+
+Fig2
+
+ggplot2::ggsave(file="fig/Figure2.pdf", Fig2, width = 180, height = 150, dpi = 300, units="mm")
+
+
+##################### Figure 3
+coul= c("#d63232", "#ffbf00","#293885","#374f2f")
+
+### A plotting the effects of IgA and mucin accross microbiome components
 para <- summary(modelB_B)$fixed
 
 res.df <- data.frame(Effect=rownames(para),
@@ -831,17 +925,21 @@ res.df <- rbind(res.df, res2)
 
 res2 <- summary(modelB_F)$fixed
 res2$Domain <- "Fungi"
-
 res2$Effect <- rownames(res2)
 res2 <- res2[-1,c(9, 1, 3,4,8)]
 names(res2) <- names(res.df)
 res.df <- rbind(res.df, res2)
 
+res2 <- summary(modelB)$fixed
+res2$Domain <- "Overall"
+res2$Effect <- rownames(res2)
+res2 <- res2[-1,c(9, 1, 3,4,8)]
+names(res2) <- names(res.df)
+res.df <- rbind(res.df, res2)
 
+res.df$Domain <- factor(res.df$Domain, levels=c("Bacteria", "Fungi", "Parasite", "Overall"))
 
-res.df$Domain <- factor(res.df$Domain, levels=c("Bacteria", "Fungi", "Parasite"))
-
-#write.csv(res.df, "tmp/summary_BRMSmodels.csv")
+write.csv(res.df, "tmp/summary_BRMSmodels.csv")
 
 resdf_B <- res.df[res.df$Effect=="IgAP",]
 
@@ -850,6 +948,7 @@ IgAB<-ggplot(resdf_B, aes(x=Estimate, y=Domain, colour=Domain))+
     geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
                   linewidth=1, width=0.4)+
     geom_point(size=3)+
+    scale_x_continuous(limits=c(-0.20, 0.02))+
 #    scale_x_reverse()+
    scale_colour_manual(values=coul)+
 #    scale_discrete_vi()+
@@ -857,7 +956,7 @@ IgAB<-ggplot(resdf_B, aes(x=Estimate, y=Domain, colour=Domain))+
     theme_classic(base_size=12)+
     theme(legend.position = "none")
 
-IgAB
+#IgAB
 
 resdf_M <- res.df[res.df$Effect=="MucinP",]
 MucinB<-ggplot(resdf_M, aes(x=Estimate, y=Domain, colour=Domain))+
@@ -865,6 +964,7 @@ MucinB<-ggplot(resdf_M, aes(x=Estimate, y=Domain, colour=Domain))+
     geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
                   linewidth=1, width=0.4)+
     geom_point(size=3)+
+        scale_x_continuous(limits=c(-0.20, 0.02))+
 #    scale_x_reverse()+
    scale_colour_manual(values=coul)+
 #    scale_discrete_vi()+
@@ -872,234 +972,54 @@ MucinB<-ggplot(resdf_M, aes(x=Estimate, y=Domain, colour=Domain))+
     theme_classic(base_size=12)+
     theme(legend.position = "none")
 
-MucinB
+#MucinB
 
-resdf_A <- res.df[res.df$Effect=="Age",]
-AgeB<-ggplot(resdf_A, aes(x=Estimate, y=Domain, colour=Domain))+
-    geom_vline(xintercept=0, linetype="dashed", linewidth=1)+
-    geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
-                  linewidth=1, width=0.4)+
-    geom_point(size=3)+
-#    scale_x_reverse()+
-   scale_colour_manual(values=coul)+
-#    scale_discrete_vi()+
-    labs(x="Age distance", y="")+
-    theme_classic(base_size=12)+
-    theme(legend.position = "none")
+Fig3A <- cowplot::plot_grid(IgAB, MucinB, ncol=2)
 
-AgeB
-
-resdf_AA <- res.df[res.df$Effect=="IgAP:Age",]
-IgAAgeB<-ggplot(resdf_AA, aes(x=Estimate, y=Domain, colour=Domain))+
-    geom_vline(xintercept=0, linetype="dashed", linewidth=1)+
-    geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
-                  linewidth=1, width=0.4)+
-    geom_point(size=3)+
-#    scale_x_reverse()+
-   scale_colour_manual(values=coul)+
-#    scale_discrete_vi()+
-    labs(x="Age dist:f-IgA dist", y="")+
-    theme_classic(base_size=12)+
-    theme(legend.position = "none")
-
-IgAAgeB
-
-resdf_MA <- res.df[res.df$Effect=="MucinP:Age",]
-MucAgeB<-ggplot(resdf_MA, aes(x=Estimate, y=Domain, colour=Domain))+
-    geom_vline(xintercept=0, linetype="dashed", linewidth=1)+
-    geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
-                  linewidth=1, width=0.4)+
-    geom_point(size=3)+
-#    scale_x_reverse()+
-   scale_colour_manual(values=coul)+
-#    scale_discrete_vi()+
-    labs(x="Age dist: f-mucin dist", y="")+
-    theme_classic(base_size=12)+
-    theme(legend.position = "none")
-
-MucAgeB
-
-AgeI <- cowplot::plot_grid(AgeB, IgAAgeB, MucAgeB, labels="AUTO", ncol=3)
+# B predicted effects of the interaction between immune responses and age
+library("interactions")
 
 
-# interaction
-library(tidyr)
-library(modelr)
-library(tidybayes)
+MucinPara <- interact_plot(modelB_P,
+                           pred=MucinP,
+                           modx=Age,
+                           interval=TRUE,
+                           int.type=c("confidence"),
+                           int.width=0.5
+                           )+
+    theme_classic()+
+    theme(legend.position="none")
 
-######################## Figure 3: interaction
-newdata1 <- data.frame(IgAP=seq_range(0:1, n=51),
-                       MucinP=rep(median(data.dyad$MucinP), n=51),
-                       Age=rep(1, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Fungi_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-newdata0 <- data.frame(IgAP=seq_range(0:1, n=51),
-                       MucinP=rep(median(data.dyad$MucinP), n=51),
-                       Age=rep(0, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Fungi_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
+IgAInt <- interact_plot(modelB,
+                         pred=IgAP,
+                         modx=Age,
+                         interval=TRUE,
+                         int.type=c("confidence"),
+                         int.width=0.5
+                                        #                         rug=TRUE,
+#                         partial.residuals=TRUE
+                        )+
+    scale_y_continuous(limits=c(0.20, 0.40))+
+    theme_classic()+
+    theme(legend.position="none")
 
-pred.df0 <- add_epred_draws(newdata0, modelB_P)
-pred.df1 <- add_epred_draws(newdata1, modelB_P)
-pred.df <- rbind(pred.df0, pred.df1)
-pred.df$Age <- as.factor(pred.df$Age)
-
-IgA_B <- ggplot(pred.df, aes(x=IgAP, y=.epred, group=Age))+
-    stat_lineribbon(size=0.5, .width=c(.95, .8, .5), alpha=0.5)+
-    ylab("Overall microbiome similarity")+
-    xlab("f-IgA distances")+
-    theme_classic()
-
-IgA_B
-
-newdata1 <- data.frame(MucinP=seq_range(0:1, n=51),
-                       IgAP=rep(median(data.dyad$IgAP), n=51),
-                       Age=rep(1, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Fungi_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-
-newdata0 <- data.frame(MucinP=seq_range(0:1, n=51),
-                       IgAP=rep(median(data.dyad$IgAP), n=51),
-                       Age=rep(0, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Fungi_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-
-pred.df0 <- add_epred_draws(newdata0, modelB_P)
-pred.df1 <- add_epred_draws(newdata1, modelB_P)
-
-pred.df <- rbind(pred.df0, pred.df1)
-pred.df$Age <- as.factor(pred.df$Age)
-
-Mucin_B <-    ggplot(pred.df, aes(x=MucinP, y=.epred, group=Age))+
-    stat_lineribbon(size=0.5, .width=c(.95, .8, .5), alpha=0.5)+
-    ylab("Overall microbiome similarity")+
-    xlab("f-mucin distances")+
-    theme_classic()
-
-Mucin_B
-
-AgeI2 <- cowplot::plot_grid(IgA_B, Mucin_B, labels=c("D", "E"))
-
-Fig3 <- cowplot::plot_grid(AgeI, AgeI2, rel_heights=c(0.6, 1), ncol=1)
-
-ggplot2::ggsave(file="fig/Figure3.pdf", Fig3, width = 190, height = 150, dpi = 300, units="mm")
+MucinInt <- interact_plot(modelB,
+                           pred=MucinP,
+                           modx=Age,
+                           interval=TRUE,
+                           int.type=c("confidence"),
+                           int.width=0.5
+                          )+
+    scale_y_continuous(limits=c(0.20, 0.40))+
+    theme_classic()+
+    theme(legend.position="none")
 
 
-newdata1 <- data.frame(IgAP=seq_range(0:1, n=51),
-                       MucinP=rep(median(data.dyad$MucinP), n=51),
-                       Age=rep(1, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Parasite_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-newdata0 <- data.frame(IgAP=seq_range(0:1, n=51),
-                       MucinP=rep(median(data.dyad$MucinP), n=51),
-                       Age=rep(0, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Parasite_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
 
-pred.df0 <- add_epred_draws(newdata0, modelB_F)
-pred.df1 <- add_epred_draws(newdata1, modelB_F)
-pred.df <- rbind(pred.df0, pred.df1)
-pred.df$Age <- as.factor(pred.df$Age)
+Fig3B <- cowplot::plot_grid(IgAInt, MucinInt, ncol=2)
+Figure3 <- cowplot::plot_grid(Fig3A, Fig3B, ncol=1, labels="AUTO")
 
-IgA_B <- ggplot(pred.df, aes(x=IgAP, y=.epred, group=Age))+
-    stat_lineribbon(size=0.5, .width=c(.95, .8, .5), alpha=0.5)+
-    ylab("Overall microbiome similarity")+
-    xlab("f-IgA distances")+
-    theme_classic()
-
-IgA_B
-
-newdata1 <- data.frame(MucinP=seq_range(0:1, n=51),
-                       IgAP=rep(median(data.dyad$IgAP), n=51),
-                       Age=rep(1, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Parasite_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-
-newdata0 <- data.frame(MucinP=seq_range(0:1, n=51),
-                       IgAP=rep(median(data.dyad$IgAP), n=51),
-                       Age=rep(0, n=51),
-                       Clan=rep(0, n=51),
-                       IDA=rep("M668", 51),
-                       IDB=rep("M604", 51),
-                       Gen_mum=rep(0, n=51),
-                       Temporal=rep(0, n=51),
-                       Rank=rep(median(data.dyad$Rank)),
-                       Parasite_B=rep(1, n=51),
-                       Bacteria_B=rep(1, n=51),
-                       Season=rep(1, n=51),
-                       Batch=rep(1, n=51))
-
-pred.df0 <- add_epred_draws(newdata0, modelB_F)
-pred.df1 <- add_epred_draws(newdata1, modelB_F)
-
-pred.df <- rbind(pred.df0, pred.df1)
-pred.df$Age <- as.factor(pred.df$Age)
-
-Mucin_B <-    ggplot(pred.df, aes(x=MucinP, y=.epred, group=Age))+
-    stat_lineribbon(size=0.5, .width=c(.95, .8, .5), alpha=0.5)+
-    ylab("Overall microbiome similarity")+
-    xlab("f-mucin distances")+
-    theme_classic()
-
-Mucin_B
-
-
+ggplot2::ggsave(file="fig/Figure3.pdf", Figure3, width = 180, height = 200, dpi = 300, units="mm")
 
 #############################
 # random forest regressions
@@ -1165,17 +1085,17 @@ saveRDS(rfFit1, "tmp/rfFit_IgA.rds")
 print(rfFit1)
 print(rfFit1$finalModel)
 test_predictions <- predict(rfFit1, newdata=IgA_df_test)
-print(postResample(test_predictions, IgA_df_test$IgA))
 
+print(postResample(test_predictions, IgA_df_test$IgA))
 pred_obs <- data.frame(predicted=test_predictions, observed=IgA_df_test$IgA)
 cor.test(pred_obs$predicted, pred_obs$observed, method="spearman")
 
-corr <-ggplot(pred_obs, aes(x=predicted, y=observed))+
-        geom_point(size=3, color="black", alpha=0.4)+
+#corr <-ggplot(pred_obs, aes(x=predicted, y=observed))+
+#        geom_point(size=3, color="black", alpha=0.4)+
 #    geom_abline(linetype=5, color="black", size=1, alpha=0.2)+
-    stat_poly_line(color="black", size=1, alpha=0.2) +
-    stat_poly_eq() +
-    theme_classic()
+#    stat_poly_line(color="black", size=1, alpha=0.2) +
+#    stat_poly_eq() +
+#    theme_classic()
 
 imp <- varImp(rfFit1)
 imp <- imp$importance
@@ -1192,15 +1112,17 @@ library(seqinr)
 write.csv2(IgAt, "tmp/IgAtop20.csv")
 write.fasta(as.list(IgAt$seq), IgAt$name, "tmp/IgAtop20.fasta")
 
+## Figure 4A
 topImp <-
     ggplot(imp20, aes(y=taxa, x=Overall))+
     geom_segment( aes(yend=taxa, xend=0)) +
     geom_point(size=4, color="orange")+
     labs(x="importance", y="")+
-    theme_classic()
+    theme_classic()+
+    theme(axis.text.y = element_text(angle = 20, vjust = 0.5))
 
-Fig4 <- cowplot::plot_grid(corr, topImp, labels="AUTO", rel_widths=c(0.6, 1))
 
+## Figure S5: plotting marginal effects for supplements
 top_features <- imp20$taxa
 pd_plots <- list(NULL)
 top_features <- as.character(top_features)
@@ -1215,10 +1137,10 @@ for (a in 1:length(top_features)) {
     print(paste0("Partial dependence of ", top_features[a]))
 }
 
-fig4_2 <- wrap_plots(pd_plots, ncol=4)
-fig4 <- cowplot::plot_grid(Fig4, fig4_2, nrow=2, rel_heights=c(0.5, 1))
+figS4_2 <- wrap_plots(pd_plots, ncol=4)
 
-## now we want to predict mucin
+#####################################################
+## now we want to predict mucin with the taxa abundances
 df <- data.frame(otu, ID=metadt$hyena_ID, Clan=metadt$clan, Age=metadt$age_sampling,
                  CSocialRank=metadt$CSocialRank, Mum=metadt$genetic_mum,
                  Season=metadt$season, batch=metadt$batch, Mucin=metadt$logmucin)
@@ -1259,14 +1181,14 @@ pred_obs <- data.frame(predicted=test_predictions, observed=Mucin_df_test$Mucin)
 
 cor.test(pred_obs$predicted, pred_obs$observed, method="spearman")
 
-corrM <- 
-    ggplot(pred_obs, aes(x=predicted, y=observed))+
-    geom_point(size=3, color="black", alpha=0.4)+
+#corrM <- 
+#    ggplot(pred_obs, aes(x=predicted, y=observed))+
+#    geom_point(size=3, color="black", alpha=0.4)+
 #    geom_abline(linetype=5, color="black", size=1, alpha=0.2)+
-    stat_poly_line(color="black", size=1, alpha=0.2) +
-        stat_poly_eq() +
+#    stat_poly_line(color="black", size=1, alpha=0.2) +
+#        stat_poly_eq() +
 #    stat_smooth(method="lm", formula=y~x, geom="smooth")+
-    theme_classic()
+#    theme_classic()
 
 impM <- varImp(rfFitM)
 impM <- impM$importance
@@ -1283,17 +1205,17 @@ mucint <- data.frame(seq=taxa_names(PMS)[as.numeric(rownames(impM20))], name=imp
 write.csv2(mucint, "tmp/mucintop20.csv")
 write.fasta(as.list(mucint$seq), mucint$name, "tmp/mucintop20.fasta")
 
+# fig 4B
 topMImp <- ggplot(impM20, aes(y=taxa, x=Overall))+
     geom_segment( aes(yend=taxa, xend=0)) +
     geom_point(size=4, color="orange")+
     labs(x="importance", y="")+
-    theme_classic()
+    theme_classic()+
+    theme(axis.text.y = element_text(angle = 20, vjust = 0.5))
 
-Fig5 <- cowplot::plot_grid(corrM, topMImp, labels=c("C", "D"), rel_widths=c(0.6, 1))
 
-Figure4 <- cowplot::plot_grid(Fig4, Fig5, ncol=1)
-ggplot2::ggsave(file="fig/Figure4.pdf", Figure4, width = 200, height = 200, dpi = 300, units="mm")
 
+## plotting figure S6 - marginal effects for Mucin
 top_features <- impM20$taxa
 pd_plots <- list(NULL)
 top_features <- as.character(top_features)
@@ -1307,31 +1229,27 @@ for (a in 1:length(top_features)) {
     print(paste0("Partial dependence of ", top_features[a]))
 }
 
-fig5_2 <- wrap_plots(pd_plots, ncol=4)
+figS5_2 <- wrap_plots(pd_plots, ncol=4)
 
-ggplot2::ggsave(file="fig/FigurePDP_IgA.pdf", fig4_2, width = 200, height = 180, dpi = 300, units="mm")
-
-ggplot2::ggsave(file="fig/FigurePDP_Muc.pdf", fig5_2, width = 200, height = 180, dpi = 300, units="mm")
-
+ggplot2::ggsave(file="fig/FigurePDP_IgA.pdf", figS4_2, width = 200, height = 180, dpi = 300, units="mm")
+ggplot2::ggsave(file="fig/FigurePDP_Muc.pdf", figS5_2, width = 200, height = 180, dpi = 300, units="mm")
 
 #####################################################################
-###### network
-
-colnames(otu) # this is defined above.
-
-taxa_names(PMS) <- colnames(otu)
-
-## prevalebce filtering of 10%
-#KeepTaxap <- microbiome::prevalence(PMS)>0.2
-#PS<- phyloseq::prune_taxa(KeepTaxap, PMS)
-#PS
+###### network ########################################################
+taxa_names(PMS) <- colnames(otu) # renaming the taxa ID
 
 #### spiec easi
 pargs <- list(rep.num=1000, seed=10010, ncores=90, thresh=0.05)
 
-## mb
-#se.net <- spiec.easi(PMS, method="mb", pulsar.params=pargs)
-#saveRDS(se.net, "tmp/se.fnet.rds")
+
+############## network estimation ########################
+DOnetwork <- FALSE # this tmp file is too heavy to submit to github
+                   # if running for the first time, set to true
+
+if (DOnetwork) {
+    se.net <- spiec.easi(PMS, method="mb", pulsar.params=pargs)
+    saveRDS(se.net, "tmp/se.fnet.rds")
+} else
 se.net <- readRDS("tmp/se.fnet.rds")
 
 se.net$select$stars$summary # lambda path
@@ -1425,9 +1343,60 @@ vip$muc[which(V(net)$id%in%as.vector(impM20$taxa))] <- "yes"
 
 vip
 
+
+## taxa important for either IgA or mucin
+vip$Imm <- vip$IgA
+vip$Imm[vip$muc=="yes"] <- "yes"
+
 # testing importance of the predictors in the network
-summary(aov(hub_score~muc, data=vip))
-summary(aov(hub_score~IgA, data=vip))
+summary(aov(hub_score~Imm, data=vip))
+
+summary(aov(closeness~Imm, data=vip))
+
+summary(aov(betweness~Imm, data=vip))
+
+summary(aov(degree~Imm, data=vip))
+
+## the means and sd
+mean(vip$hub_score[vip$Imm=="yes"])
+mean(vip$hub_score[vip$Imm=="no"])
+sd(vip$hub_score[vip$Imm=="yes"])
+sd(vip$hub_score[vip$Imm=="no"])
+
+mean(vip$degree[vip$Imm=="yes"])
+mean(vip$degree[vip$Imm=="no"])
+sd(vip$degree[vip$Imm=="yes"])
+sd(vip$degree[vip$Imm=="no"])
+
+mean(vip$closeness[vip$Imm=="yes"])
+mean(vip$closeness[vip$Imm=="no"])
+sd(vip$closeness[vip$Imm=="yes"])
+sd(vip$closeness[vip$Imm=="no"])
+
+mean(vip$betweness[vip$Imm=="yes"])
+mean(vip$betweness[vip$Imm=="no"])
+sd(vip$betweness[vip$Imm=="yes"])
+sd(vip$betweness[vip$Imm=="no"])
+
+
+
+IgA_hub <- ggplot(vip, aes(y=hub_score, x= IgA))+
+            geom_boxplot()+
+    theme_classic()
+
+ggplot(vip, aes(y= closeness, x= IgA))+
+            geom_boxplot()+
+            theme_classic()
+
+ggplot(vip, aes(y= betweness, x= IgA))+
+            geom_boxplot()+
+            theme_classic()
+
+
+ggplot(vip, aes(y= degree, x= IgA))+
+            geom_boxplot()+
+            theme_classic()
+
 
 write.csv(vip, "tmp/Network_VIN.csv")
 
@@ -1448,18 +1417,19 @@ coul= c("#d63232", "#5b5b5b", "#ffbf00","#293885","#b7b7b7")
 mc <- coul[as.numeric(V(net)$group)]
 
 pdf("fig/Network.pdf",
-    width =100, height = 100)
+    width =50, height = 50)
 set.seed(100)
 plot(net,
-     layout=layout.fruchterman.reingold,
+     layout=layout_with_drl,
      vertex.shape=V(net)$domain,
-     vertex.label=label,
+     vertex.label="",
 #     vertex.label.dist=0.4,
 #     vertex.label.degree=-pi/2,
 #     vertex.size=as.integer(cut(hub_score(net)$vector, breaks=10))+1,
      vertex.size=V(net)$size,
      vertex.color=adjustcolor(mc,0.8),
-     edge.width=as.integer(cut(E(net)$weight, breaks=6))/6,
+#    edge.width=as.integer(cut(E(net)$weight, breaks=6))/6,
+     edge.width=0.5,
      margin=c(0,0,0,0))
 legend(x=-2, y=1, legend=levels(V(net)$group), col=coul, bty="n",x.intersp=0.25,text.width=0.045, pch=20, pt.cex=1.5)
 dev.off()
@@ -1486,129 +1456,233 @@ V(g2)$group
 coul= c("#d63232", "#5b5b5b", "#ffbf00","#293885","#b7b7b7")
 mc <- coul[as.numeric(V(g2)$group)]
 
+#V(g2)$label <- V(g2)$name
+
 V(g2)$label <- " "
 V(g2)$label[which(V(g2)$id%in%as.vector(imp20$taxa))] <- V(g2)$id[which(V(g2)$id%in%as.vector(imp20$taxa))]
 V(g2)$label[which(V(g2)$id%in%as.vector(impM20$taxa))] <- V(g2)$id[which(V(g2)$id%in%as.vector(impM20$taxa))]
 
 pdf("fig/NetworkS.pdf",
-    width =20, height = 20)
+    width =8, height = 8)
 set.seed(100)
 plot(g2,
-     layout=layout.fruchterman.reingold,
+#     layout=layout.circle,
+#     layout=layout.fruchterman.reingold(g2, niter=1000, area=5*vcount(net)^2),
+     layout=layout_with_kk,
      vertex.shape=V(g2)$domain,
      vertex.label=V(g2)$label,
-#     vertex.label.dist=0.4,
-#     vertex.label.degree=-pi/2,
+     vertex.label.dist=0.4,
+     vertex.label.degree=-pi/2,
 #     vertex.size=as.integer(cut(hub_score(net)$vector, breaks=10))+1,
      vertex.color=adjustcolor(mc,0.8),
-     edge.width=as.integer(cut(E(g2)$weight, breaks=6))/4,
+     edge.width=0.5,
      margin=c(0,0,0,0))
 legend(x=-2, y=1, legend=levels(V(g2)$group), col=coul, bty="n",x.intersp=0.25,text.width=0.045, pch=20, pt.cex=1.5)
 dev.off()
 
-###  H. is the effect of age on IgA and mucin modulated by microbiome?
-head(metadt)
+############### compiling Figure 4 ############################
+#### heatmap with correlations
+# we first selected the top predictive taxa for both IgA and mucin
+ab.df <- as.data.frame(otu[,idx]) # idx was created previously in the network section
+ab.df$IgA <- metadt$logIgA
+ab.df$mucin <- metadt$logmucin
+#ab.df$Sample <- rownames(ab.df)
+## correlation
+cor.matrix <- cor(ab.df, method="spearman")
+# only taxa and IgA/mucin columns
+cor_df <- as.data.frame(cor.matrix)[1:32,c(33,34)]
+cor_df$taxa <- rownames(cor_df)
 
-V(g2)$name
+## we want the exact same order, which is taxa predicting IgA, then taxa predicting both and finally taxa
+# predicting only mucin.
+cor_df$taxa <- factor(cor_df$taxa, levels=unique(cor_df$taxa))
 
-
-E(g2)[.from(23)]
-
-print(E(g2)[.from(33)]$weight)
-
-print(E(g2)[.from(33)])
-
-
-
-metadt$ASV_685 <- PMS@otu_table[,685]
-metadt$ASV_8 <- PMS@otu_table[,8]
-metadt$ASV_342 <- PMS@otu_table[,342]
-metadt$ASV_674 <- PMS@otu_table[,674]
-metadt$ASV_739 <- PMS@otu_table[,739]
-metadt$ASV_10 <- PMS@otu_table[,10]
-metadt$ASV_85 <- PMS@otu_table[,85]
-metadt$ASV_103 <- PMS@otu_table[,103]
-metadt$ASV_210 <- PMS@otu_table[,210]
-metadt$ASV_230 <- PMS@otu_table[,239]
+library("tidyr")
+#library(viridis)
+library(scico)
 
 
-metadt$ASV_392 <- PMS@otu_table[,392]
-metadt$ASV_757 <- PMS@otu_table[,757]
-metadt$ASV_39 <- PMS@otu_table[,39]
-metadt$ASV_808 <- PMS@otu_table[,808]
-metadt$ASV_674 <- PMS@otu_table[,674]
-metadt$ASV_801 <- PMS@otu_table[,801]
-metadt$ASV_718 <- PMS@otu_table[,718]
+cor_long <- pivot_longer(data=cor_df,
+                        cols=-taxa,
+                        names_to="Immune_Marker",
+                        values_to="Correlation")
+## order by ASV number, no longer using
+#cor_long <- cor_long %>%
+#    mutate(taxa_number =as.numeric(gsub("ASV_([0-9]+).*", "\\1", taxa))) %>%
+#    arrange(taxa_number) %>%
+#    mutate(taxa=factor(taxa, levels=(unique(taxa))))
 
-metadt <- as.data.frame(metadt)
-class(metadt) <- "data.frame"
-library(lmerTest)
-IgAM0 <- lmer(logIgA~age_sampling +ASV_685*ASV_8+ASV_342+ASV_674+ASV_739+(1|hyena_ID), metadt)
-IgAM1 <- lmer(logIgA~age_sampling+ASV_685*ASV_8+age_sampling*ASV_342+age_sampling*ASV_674+age_sampling*ASV_739+(1|hyena_ID), metadt)
+heatmap <- ggplot(data=cor_long, mapping=aes(y=Immune_Marker, x=taxa, fill= Correlation))+
+    geom_tile()+
+    #    scale_fill_gradient2(low="blue", mid="white", high="red", midpoint=0)+
+                                        #    scale_fill_viridis(option="C", direction=-1)+
+    scale_fill_scico(palette = "vik")+
+    theme_classic()+
+    theme(axis.text.x = element_text(angle = 80, vjust = 0.5)) +
+    labs(x="", y="", fill="Spearman's rho")
 
-#anova(IgAM0)
-#anova(IgAM1)
-anova(IgAM0, IgAM1)
+Fig4A <- cowplot::plot_grid(topImp, topMImp, labels=c("A", "B"))
 
-MucM0 <- lmer(logIgA~age_sampling+ASV_392+ASV_8+ASV_39+ASV_718+ASV_757+ASV_801+
-                  ASV_808+(1|hyena_ID), metadt)
+Fig4ABC <- plot_grid(Fig4A, heatmap, ncol=1, labels=c("", "C"))
 
-MucM1 <- lmer(logIgA~age_sampling+ASV_392*ASV_8+ASV_392*ASV_39+ASV_392*ASV_718+ASV_392*ASV_757+ASV_392*ASV_801+
-                  ASV_392*ASV_808+(1|hyena_ID), metadt)
-
-anova(MucM0, MucM1)
-
-anova(MucM0)
-
-anova(MucM1)
+ggplot2::ggsave(file="fig/Figure4.pdf", Fig4ABC, width = 200, height = 200, dpi = 300, units="mm")
 
 ###########################################################
-#### plotting figure S1
+#### plotting figure S3
 
+plot.df <- as.data.frame(sample_data(PMS))
+class(plot.df) <- "data.frame"
 
-IgA_hist <- ggplot(sample_data(PMS), aes(x=log(IgA_inputed)))+
+plot.df$IgAP <- log(plot.df$IgA_imputed)
+plot.df$MucinP <- log(plot.df$mucin_imputed)
+
+plot.df$date_sampling <- as.Date(plot.df$date_sampling,
+                                    format='%m/%d/%Y')
+plot.df$Year <- as.numeric(format(plot.df$date_sampling, "%Y"))
+plot.df$Season <- as.numeric(format(plot.df$date_sampling, "%m"))
+plot.df$season <- "wet"
+plot.df$season[plot.df$Season>5&plot.df$Season<11] <- "dry"
+
+IgA_hist <- ggplot(plot.df, aes(x=IgAP))+
     geom_histogram()+
-#    scale_x_date(date_breaks="year", date_labels="%Y")+
-    labs(x="Faecal IgA (RU, log scale)", y="Sample count")+
+    labs(x="Faecal IgA (log scale)", y="Sample count")+
     theme_classic()
 
-mucin_hist <- ggplot(sample_data(PMS), aes(x=log(mucin_inputed)))+
+mucin_hist <- ggplot(plot.df, aes(x=MucinP))+
+    geom_histogram()+
+    labs(x="Faecal mucin (log scale)", y="Sample count")+
+    theme_classic()
+
+Year_hist <- ggplot(plot.df, aes(x=Year))+
     geom_histogram()+
 #    scale_x_date(date_breaks="year", date_labels="%Y")+
-    labs(x="Faecal mucin (OE, log scale)", y="Sample count")+
+    labs(x="Year of sampling", y="Sample count")+
+    theme_classic()
+
+rank_hist <- ggplot(plot.df, aes(x=CSocialRank))+
+    geom_histogram()+
+    labs(x="Social rank", y="Sample count")+
+    theme_classic()
+
+season_hist <-    ggplot(plot.df, aes(x=season))+
+    geom_histogram(stat="count")+
+    labs(x="Season", y="Sample count")+
     theme_classic()
 
 
-Age_diff <- ggplot(data.dyad, aes(x=Age))+
-    geom_histogram()+
-#    scale_x_date(date_breaks="year", date_labels="%Y")+
-    labs(x="Age distance", y="Pair count")+
+
+### for these plots we remove the multiple sample
+ID.df <- plot.df[,c("clan", "genetic_mum", "hyena_ID")]
+
+ID.df <- unique(ID.df)
+
+clan_hist <- ggplot(ID.df, aes(clan))+
+    geom_histogram(stat="count")+
+    labs(x="Clan", y="Individual count")+
     theme_classic()
 
-IgA_diff <- ggplot(data.dyad, aes(x=IgAP))+
+sib.df <- as.data.frame(summary(as.factor(ID.df$genetic_mum)))
+names(sib.df) <- "sib"
+sib.df$sib <- sib.df$sib-1
+sib_hist <- ggplot(sib.df, aes(x=sib))+
     geom_histogram()+
-#    scale_x_date(date_breaks="year", date_labels="%Y")+
-    labs(x="f-IgA distance", y="Pair count")+
+    scale_x_continuous(breaks=seq(0, max(sib.df$sib), by=1))+
+    labs(x="Number of siblings", y="Individual count")+
     theme_classic()
 
-Muc_diff <- ggplot(data.dyad, aes(x=MucinP))+
-    geom_histogram()+
-#    scale_x_date(date_breaks="year", date_labels="%Y")+
-    labs(x="f-mucin distance", y="Pair count")+
+FigureS3 <- cowplot::plot_grid(IgA_hist, mucin_hist, Year_hist, rank_hist,
+                               season_hist, clan_hist, sib_hist, labels="AUTO", ncol=3)
+
+ggplot2::ggsave(file="fig/FigureS3.pdf", FigureS3, width = 180, height = 230, dpi = 300, units="mm")
+
+#####################################################
+                                        #Plotting Figure S4
+# ordination plots
+#####################################################
+## all samples
+Overall <- vegan::metaMDS(PMS@otu_table, distance="bray", try=250, k=3)
+
+OverallEFit <- envfit(Overall, plot.df[, c("IgAP", "MucinP", "CSocialRank",
+                                           "clan", "Season")], na.rm=TRUE)
+
+data.scores <-  as.data.frame(scores(Overall)$sites)
+data.scores <- cbind(data.scores, otu_table(PMS)[rownames(data.scores)])
+
+ALL <- ggplot(data=data.scores, aes(x=NMDS1, y=NMDS2))+
+    geom_point(aes(colour=plot.df$age_sampling_cat))+
+        scale_color_manual(values=c("#a5c3ab", "#eac161"))+
+    geom_segment(aes(x=0, y=0, xend=NMDS1, yend=NMDS2),
+                 data=scores(OverallEFit, "vectors"), size=1, alpha=0.5)+
+    geom_text(data = scores(OverallEFit, "vectors"), aes(x = NMDS1, y = NMDS2+0.04),
+              label = row.names(scores(OverallEFit, "vectors")), colour = "red", fontface = "bold")+
+    theme_classic()+
+    theme(legend.position="none")
+
+## for juveniles
+Juvenile <- subset_samples(PMS, age_sampling_cat=="sampled_as_juvenile")
+otu_juv <- as.data.frame(Juvenile@otu_table)
+class(otu_juv) <- "data.frame"
+
+JUVall <- vegan::metaMDS(otu_juv, distance="bray", try=250, k=3)
+juv.df <- plot.df[plot.df$age_sampling_cat=="sampled_as_juvenile",]
+
+JUVallEFit <- envfit(JUVall, juv.df[, c("IgAP", "MucinP", "CSocialRank",
+                                           "clan", "Season")], na.rm=TRUE)
+
+juv.scores <-  as.data.frame(scores(JUVall)$sites)
+
+JUV <- ggplot(data=juv.scores, aes(x=NMDS1, y=NMDS2))+
+    geom_point(colour="#eac161")+
+    geom_segment(aes(x=0, y=0, xend=NMDS1, yend=NMDS2),
+                 data=scores(JUVallEFit, "vectors"), size=1, alpha=0.5)+
+    geom_text(data = scores(JUVallEFit, "vectors"), aes(x = NMDS1, y = NMDS2+0.04),
+              label = row.names(scores(JUVallEFit, "vectors")), colour = "red", fontface = "bold")+
     theme_classic()
 
-AgeSD <- cowplot::plot_grid(repeatedS, Age_diff, nrow=1, rel_widths=c(1, 0.5), labels=c("a", "b"))
-ImmSD <- cowplot::plot_grid(IgA_hist, IgA_diff, mucin_hist, Muc_diff, labels=c("c", "d", "e", "f"))
-FigureSD <- cowplot::plot_grid(AgeSD, ImmSD, nrow=2)
 
-ggplot2::ggsave(file="fig/FigureSD.pdf", FigureSD, width = 190, height = 190, dpi = 300, units="mm")
+## for Adults
+Adult <- subset_samples(PMS, age_sampling_cat=="sampled_as_adult")
+otu_ad <- as.data.frame(Adult@otu_table)
+class(otu_ad) <- "data.frame"
+ADall <- vegan::metaMDS(otu_ad, distance="bray", try=250, k=3)
+ad.df <- plot.df[plot.df$age_sampling_cat=="sampled_as_adult",]
+
+ADallEFit <- envfit(ADall, ad.df[, c("IgAP", "MucinP", "CSocialRank",
+                                           "clan", "Season")], na.rm=TRUE)
+ad.scores <-  as.data.frame(scores(ADall)$sites)
+
+AD <- ggplot(data=ad.scores, aes(x=NMDS1, y=NMDS2))+
+    geom_point(colour="#a5c3ab")+
+    geom_segment(aes(x=0, y=0, xend=NMDS1, yend=NMDS2),
+                 data=scores(ADallEFit, "vectors"), size=1, alpha=0.5)+
+    geom_text(data = scores(ADallEFit, "vectors"), aes(x = NMDS1, y = NMDS2+0.04),
+              label = row.names(scores(ADallEFit, "vectors")), colour = "red", fontface = "bold")+
+    theme_classic()
+
+## For all samples and coloured by year
+Year <- ggplot(data=data.scores, aes(x=NMDS1, y=NMDS2))+
+    geom_point(aes(colour=as.factor(plot.df$Year)))+
+#        scale_color_manual(values=c("#a5c3ab", "#eac161"))+
+    geom_segment(aes(x=0, y=0, xend=NMDS1, yend=NMDS2),
+                 data=scores(OverallEFit, "vectors"), size=1, alpha=0.5)+
+    geom_text(data = scores(OverallEFit, "vectors"), aes(x = NMDS1, y = NMDS2+0.04),
+              label = row.names(scores(OverallEFit, "vectors")), colour = "red", fontface = "bold")+
+    theme_classic()
+#    theme(legend.position="none")
+
+FigS4BC <-  cowplot::plot_grid(AD, JUV, ncol=2, labels=c("B", "C"))
+
+FigS4 <-  cowplot::plot_grid(ALL, FigS4BC, Year, ncol=1, labels=c("A", "", "D"))
+
+ggplot2::ggsave(file="fig/FigureS4.pdf", FigS4, width = 180, height = 200, dpi = 350, units="mm")
+
 
 ######################################################
-### Individual repeatability
+### Individuality of microbiome
 library(dplyr)
 samplecount <- data.frame(sample_data(PMS)) %>%
-    group_by(hyena_ID) %>%
-    summarise(NoSamples=n())
+    dplyr::group_by(hyena_ID) %>%
+    dplyr::summarise(NoSamples=n())
 
 sample_data(PMS)$Scount <- "single"
 sample_data(PMS)$Scount[sample_data(PMS)$hyena_ID%in%samplecount$hyena_ID[samplecount$NoSamples>1]] <- "rep"
