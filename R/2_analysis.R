@@ -903,78 +903,77 @@ ggplot2::ggsave(file="fig/Figure2.pdf", Fig2, width = 180, height = 150, dpi = 3
 
 
 ##################### Figure 3
+##################### A
 coul= c("#d63232", "#ffbf00","#293885","#374f2f")
 
 ### A plotting the effects of IgA and mucin accross microbiome components
-para <- summary(modelB_B)$fixed
+modelB_B3 <- ggs(modelB_B)
+catB <- filter(modelB_B3, Parameter %in% c("b_IgAP", "b_MucinP"))
+# let's not forget to subset here
+cat2B <- catB[catB$Iteration>1000,]
+cat2B$Parameter <- droplevels(cat2B$Parameter)
+unique(cat2B$Parameter)
+cat2B$Domain <- "Bacteria"
 
-res.df <- data.frame(Effect=rownames(para),
-           Estimate=para$Estimate,
-           lCI=para$'l-95% CI',
-           uCI=para$'u-95% CI')
 
-res.df$Domain <- "Bacteria"
-res.df <- res.df[!res.df$Effect=="Intercept",] # removing intercepts
+modelB_P3 <- ggs(modelB_P)
+catP <- filter(modelB_P3, Parameter %in% c("b_IgAP", "b_MucinP"))
+# let's not forget to subset here
+cat2P <- catP[catP$Iteration>1000,]
+cat2P$Parameter <- droplevels(cat2P$Parameter)
+unique(cat2B$Parameter)
+cat2P$Domain <- "Parasite"
 
-res2 <- summary(modelB_P)$fixed
-res2$Domain <- "Parasite"
-res2$Effect <- rownames(res2)
-res2 <- res2[-1,c(9, 1, 3,4,8)]
-names(res2) <- names(res.df)
-res.df <- rbind(res.df, res2)
+modelB_F3 <- ggs(modelB_F)
+catF <- filter(modelB_F3, Parameter %in% c("b_IgAP", "b_MucinP"))
+# let's not forget to subset here
+cat2F <- catF[catF$Iteration>1000,]
+cat2F$Parameter <- droplevels(cat2F$Parameter)
+unique(cat2F$Parameter)
+cat2F$Domain <- "Fungi"
 
-res2 <- summary(modelB_F)$fixed
-res2$Domain <- "Fungi"
-res2$Effect <- rownames(res2)
-res2 <- res2[-1,c(9, 1, 3,4,8)]
-names(res2) <- names(res.df)
-res.df <- rbind(res.df, res2)
+modelB_3 <- ggs(modelB)
+cat <- filter(modelB_3, Parameter %in% c("b_IgAP", "b_MucinP"))
+# let's not forget to subset here
+cat2 <- cat[cat$Iteration>1000,]
+cat2$Parameter <- droplevels(cat2$Parameter)
+unique(cat2$Parameter)
+cat2$Domain <- "Overall"
 
-res2 <- summary(modelB)$fixed
-res2$Domain <- "Overall"
-res2$Effect <- rownames(res2)
-res2 <- res2[-1,c(9, 1, 3,4,8)]
-names(res2) <- names(res.df)
-res.df <- rbind(res.df, res2)
+cat.df <- rbind(cat2B, cat2P, cat2F, cat2)
+cat.df$Domain <- factor(cat.df$Domain, levels=c("Bacteria", "Fungi", "Parasite", "Overall"))
 
-res.df$Domain <- factor(res.df$Domain, levels=c("Bacteria", "Fungi", "Parasite", "Overall"))
+cat.df_A <- cat.df[cat.df$Parameter=="b_IgAP",]
 
-write.csv(res.df, "tmp/summary_BRMSmodels.csv")
+IgAB <- ggplot(cat.df_A, aes(x = value, y=Domain, fill=Domain))+
+    geom_density_ridges(rel_min_height = 0.005, scale=5, alpha=0.8)+
+    #    facet_wrap(~Parameter)+
+    geom_vline(xintercept = 0, col  = "black", size = 1, linetype="dashed")+
+    geom_boxplot(outlier.shape = NA, width=0.2)+
+ #   scale_fill_manual(values=c("#fc9c24", "#fce69e", "#24acb4", "#b4ccbc"))+
+    scale_fill_manual(values=coul)+
+    xlab("effect size estimate of f-IgA distances")+
+    ylab("")+
+    theme_classic()+
+    theme(legend.position="none")
 
-resdf_B <- res.df[res.df$Effect=="IgAP",]
+cat.df_M <- cat.df[cat.df$Parameter=="b_MucinP",]
 
-IgAB<-ggplot(resdf_B, aes(x=Estimate, y=Domain, colour=Domain))+
-    geom_vline(xintercept=0, linetype="dashed", linewidth=1)+
-    geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
-                  linewidth=1, width=0.4)+
-    geom_point(size=3)+
-    scale_x_continuous(limits=c(-0.20, 0.02))+
-#    scale_x_reverse()+
-   scale_colour_manual(values=coul)+
-#    scale_discrete_vi()+
-    labs(x="f-IgA distance", y="")+
-    theme_classic(base_size=12)+
-    theme(legend.position = "none")
-
-#IgAB
-
-resdf_M <- res.df[res.df$Effect=="MucinP",]
-MucinB<-ggplot(resdf_M, aes(x=Estimate, y=Domain, colour=Domain))+
-    geom_vline(xintercept=0, linetype="dashed", linewidth=1)+
-    geom_errorbar(aes(xmin=lCI, xmax=uCI, colour=Domain),
-                  linewidth=1, width=0.4)+
-    geom_point(size=3)+
-        scale_x_continuous(limits=c(-0.20, 0.02))+
-#    scale_x_reverse()+
-   scale_colour_manual(values=coul)+
-#    scale_discrete_vi()+
-    labs(x="f-Mucin distance", y="")+
-    theme_classic(base_size=12)+
-    theme(legend.position = "none")
-
-#MucinB
+MucinB <- ggplot(cat.df_M, aes(x = value, y=Domain, fill=Domain))+
+    geom_density_ridges(rel_min_height = 0.005, scale=5, alpha=0.8)+
+    #    facet_wrap(~Parameter)+
+    geom_vline(xintercept = 0, col  = "black", size = 1, linetype="dashed")+
+    geom_boxplot(outlier.shape = NA, width=0.2)+
+ #   scale_fill_manual(values=c("#fc9c24", "#fce69e", "#24acb4", "#b4ccbc"))+
+    scale_fill_manual(values=coul)+
+    xlab("effect size estimate of f-mucin distances")+
+    ylab("")+
+    theme_classic()+
+    theme(legend.position="none")
 
 Fig3A <- cowplot::plot_grid(IgAB, MucinB, ncol=2)
+
+Fig3A
 
 # B predicted effects of the interaction between immune responses and age
 library("interactions")
